@@ -45,7 +45,6 @@ public class McpServerManager {
     private ScheduledTasksTool scheduledTasksTool;
     private ErrorSummaryTool errorSummaryTool;
     private JpaEntityInfoTool jpaEntityInfoTool;
-
     public McpServerManager(ApplicationContext context, Environment environment, ObjectMapper objectMapper) {
         this.context = context;
         this.environment = environment;
@@ -71,7 +70,6 @@ public class McpServerManager {
             this.scheduledTasksTool = new ScheduledTasksTool(context, environment);
             this.errorSummaryTool = new ErrorSummaryTool();
             this.jpaEntityInfoTool = new JpaEntityInfoTool(context);
-
             logger.info("Creating MCP server instance...");
             this.mcpServer = McpServer.sync(transport)
                     .serverInfo("AutoMCP-Starter", "1.0.0")
