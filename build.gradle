@@ -8,7 +8,7 @@ version = '1.0.0'
 description = 'AutoMCP-Starter: zero-configuration MCP observability and application context tooling for Spring Boot services.'
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
