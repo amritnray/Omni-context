@@ -1,7 +1,6 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 group = 'com.example'
@@ -51,11 +50,3 @@ publishing {
 tasks.named('build') {
     dependsOn tasks.named('publishToMavenLocal')
 }
-
-shadowJar {
-    archiveClassifier.set('')
-    configurations = [project.configurations.runtimeClasspath]
-}
-
-jar.enabled = false
-assemble.dependsOn shadowJar
