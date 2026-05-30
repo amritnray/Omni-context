@@ -10,6 +10,7 @@ import com.example.mcp.tools.JpaEntityInfoTool;
 import com.example.mcp.tools.MemoryDetailsTool;
 import com.example.mcp.tools.ScheduledTasksTool;
 import com.example.mcp.tools.ThreadDumpTool;
+import com.example.mcp.tools.DatabaseQueryTool;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServer;
@@ -45,6 +46,7 @@ public class McpServerManager {
     private ScheduledTasksTool scheduledTasksTool;
     private ErrorSummaryTool errorSummaryTool;
     private JpaEntityInfoTool jpaEntityInfoTool;
+private DatabaseQueryTool databaseQueryTool;
     public McpServerManager(ApplicationContext context, Environment environment, ObjectMapper objectMapper) {
         this.context = context;
         this.environment = environment;
@@ -70,6 +72,7 @@ public class McpServerManager {
             this.scheduledTasksTool = new ScheduledTasksTool(context, environment);
             this.errorSummaryTool = new ErrorSummaryTool();
             this.jpaEntityInfoTool = new JpaEntityInfoTool(context);
+this.databaseQueryTool = new DatabaseQueryTool(context.getBean(javax.sql.DataSource.class));
             logger.info("Creating MCP server instance...");
             this.mcpServer = McpServer.sync(transport)
                     .serverInfo("AutoMCP-Starter", "1.0.0")
@@ -170,6 +173,18 @@ public class McpServerManager {
             (exchange, args) -> {
                 Map<String, Object> metadata = onboardingTools.getDatabaseMetadata();
                 return new CallToolResult(List.of(new TextContent(toJson(metadata))), false);
+            }
+        );
+
+        logger.debug("Registering tool: query_database");
+        registerSyncTool(
+            "query_database",
+            "AutoMCP-Starter tool that executes read-only SQL queries against the active database. Required arg: sql (SELECT query).",
+            "{\"type\":\"object\",\"properties\":{\"sql\":{\"type\":\"string\",\"description\":\"The read-only SELECT SQL query to execute\"}},\"required\":[\"sql\"]}",
+            (exchange, args) -> {
+                String sql = (String) args.get("sql");
+                Map<String, Object> result = databaseQueryTool.executeQuery(sql);
+                return new CallToolResult(List.of(new TextContent(toJson(result))), false);
             }
         );
 
