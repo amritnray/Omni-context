@@ -6,10 +6,11 @@ import io.modelcontextprotocol.spec.McpSchema.LoggingLevel;
 import io.modelcontextprotocol.spec.McpSchema.LoggingMessageNotification;
 import org.slf4j.LoggerFactory;
 
-import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -18,6 +19,7 @@ import java.util.function.Consumer;
 public class McpLogAppender extends AppenderBase<ILoggingEvent> {
 
     private static final int BUFFER_SIZE = 200;
+    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneId.systemDefault());
     private static final org.slf4j.Logger selfLogger = LoggerFactory.getLogger(McpLogAppender.class);
     private final AtomicLong logsProcessed = new AtomicLong(0);
     
@@ -63,7 +65,7 @@ public class McpLogAppender extends AppenderBase<ILoggingEvent> {
         String formattedMessage = eventObject.getFormattedMessage();
         String levelStr = eventObject.getLevel().toString();
         
-        String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date(eventObject.getTimeStamp()));
+        String timeStamp = TIME_FMT.format(Instant.ofEpochMilli(eventObject.getTimeStamp()));
         String fullLogLine = String.format("[%s] [%s] %s - %s", timeStamp, levelStr, loggerName, formattedMessage);
         
         logBuffer.add(fullLogLine);

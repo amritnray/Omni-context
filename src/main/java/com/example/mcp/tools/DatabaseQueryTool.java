@@ -41,6 +41,7 @@ public class DatabaseQueryTool {
      * @return Map containing query results or error information
      */
     public Map<String, Object> executeQuery(String sql) {
+        long startTime = System.currentTimeMillis();
         Map<String, Object> result = new LinkedHashMap<>();
 
         try {
@@ -48,15 +49,20 @@ public class DatabaseQueryTool {
             if (!StringUtils.hasText(sql)) {
                 result.put("success", false);
                 result.put("error", "SQL query cannot be empty");
+                long duration = System.currentTimeMillis() - startTime;
+                logger.info("Query validation failed (empty query) - completed in {}ms", duration);
                 return result;
             }
 
             String trimmedSql = sql.trim();
+            logger.debug("Received SQL query: {}", truncatedSql(trimmedSql, 200));
 
             // Check that query starts with SELECT or SHOW
             if (!VALID_START_PATTERN.matcher(trimmedSql).find()) {
                 result.put("success", false);
                 result.put("error", "Only SELECT and SHOW statements are allowed");
+                long duration = System.currentTimeMillis() - startTime;
+                logger.info("Query validation failed (invalid start) - completed in {}ms", duration);
                 return result;
             }
 
@@ -64,6 +70,8 @@ public class DatabaseQueryTool {
             if (MODIFICATION_PATTERN.matcher(trimmedSql).find()) {
                 result.put("success", false);
                 result.put("error", "Modification operations (INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE, MERGE) are not allowed");
+                long duration = System.currentTimeMillis() - startTime;
+                logger.info("Query validation failed (contains modification operations) - completed in {}ms", duration);
                 return result;
             }
 
@@ -83,10 +91,12 @@ public class DatabaseQueryTool {
             result.put("columns", columns);
             result.put("rowCount", rows.size());
 
-            logger.info("Query executed successfully, returned {} rows", rows.size());
+            long duration = System.currentTimeMillis() - startTime;
+            logger.info("Query executed successfully, returned {} rows in {}ms", rows.size(), duration);
 
         } catch (Exception e) {
-            logger.error("Error executing SQL query: {}", e.getMessage(), e);
+            long duration = System.currentTimeMillis() - startTime;
+            logger.error("Error executing SQL query after {}ms: {}", duration, e.getMessage(), e);
             result.put("success", false);
             result.put("error", e.getMessage());
             result.put("rows", Collections.emptyList());
