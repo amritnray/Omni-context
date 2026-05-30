@@ -5,7 +5,6 @@ import com.example.mcp.tools.DeveloperOnboardingTools;
 import com.example.mcp.tools.PropertiesTool;
 import com.example.mcp.tools.ReadmeTool;
 import com.example.mcp.tools.RestEndpointsTool;
-import com.example.mcp.tools.CommandCodeTool;
 import com.example.mcp.tools.ErrorSummaryTool;
 import com.example.mcp.tools.JpaEntityInfoTool;
 import com.example.mcp.tools.MemoryDetailsTool;
@@ -42,7 +41,6 @@ public class McpServerManager {
     private PropertiesTool propertiesTool;
     private ReadmeTool readmeTool;
     private DeveloperOnboardingTools onboardingTools;
-    private CommandCodeTool commandCodeTool;
     private ThreadDumpTool threadDumpTool;
     private MemoryDetailsTool memoryDetailsTool;
     private ScheduledTasksTool scheduledTasksTool;
@@ -70,7 +68,6 @@ public class McpServerManager {
             this.propertiesTool = new PropertiesTool(environment);
             this.readmeTool = new ReadmeTool();
             this.onboardingTools = new DeveloperOnboardingTools(context, environment);
-            this.commandCodeTool = new CommandCodeTool(objectMapper);
             this.threadDumpTool = new ThreadDumpTool();
             this.memoryDetailsTool = new MemoryDetailsTool();
             this.scheduledTasksTool = new ScheduledTasksTool(context, environment);
@@ -244,39 +241,6 @@ public class McpServerManager {
 
                 Map<String, Object> result = restEndpointsTool.callRestEndpoint(method, path, headers, queryParams, body);
                 return new CallToolResult(List.of(new TextContent(toJson(result))), false);
-            }
-        );
-
-        logger.debug("Registering tool: command_code_login");
-        registerSyncTool(
-            "command_code_login",
-            "Authenticates the environment with Command Code CLI. Accepts an optional 'apiKey' parameter. If omitted, starts interactive browser login and returns the URL.",
-            "{\n" +
-            "  \"type\": \"object\",\n" +
-            "  \"properties\": {\n" +
-            "    \"apiKey\": { \"type\": \"string\", \"description\": \"Optional. Manual Command Code API Key\" }\n" +
-            "  }\n" +
-            "}",
-            (exchange, args) -> {
-                String apiKey = (String) args.get("apiKey");
-                if (apiKey != null && !apiKey.trim().isEmpty()) {
-                    Map<String, Object> res = commandCodeTool.saveApiKey(apiKey);
-                    return new CallToolResult(List.of(new TextContent(toJson(res))), false);
-                } else {
-                    Map<String, Object> res = commandCodeTool.startCliLogin();
-                    return new CallToolResult(List.of(new TextContent(toJson(res))), false);
-                }
-            }
-        );
-
-        logger.debug("Registering tool: command_code_status");
-        registerSyncTool(
-            "command_code_status",
-            "Checks if the local system is currently authenticated with the Command Code CLI.",
-            "{\"type\":\"object\",\"properties\":{}}",
-            (exchange, args) -> {
-                Map<String, Object> res = commandCodeTool.getStatus();
-                return new CallToolResult(List.of(new TextContent(toJson(res))), false);
             }
         );
 
