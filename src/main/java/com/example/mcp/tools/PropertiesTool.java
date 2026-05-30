@@ -1,5 +1,7 @@
 package com.example.mcp.tools;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.Environment;
@@ -15,6 +17,8 @@ import java.util.TreeMap;
  */
 public class PropertiesTool {
 
+    private static final Logger logger = LoggerFactory.getLogger(PropertiesTool.class);
+    
     private final Environment environment;
 
     // Keywords that indicate a sensitive property to mask
@@ -25,12 +29,16 @@ public class PropertiesTool {
 
     public PropertiesTool(Environment environment) {
         this.environment = environment;
+        logger.debug("PropertiesTool initialized");
     }
 
     /**
      * Retrieves all application properties, masking any sensitive values.
      */
     public Map<String, Object> getMaskedProperties() {
+        logger.info("Fetching application properties...");
+        long startTime = System.currentTimeMillis();
+        
         Map<String, Object> properties = new TreeMap<>();
 
         if (environment instanceof ConfigurableEnvironment) {
@@ -56,6 +64,9 @@ public class PropertiesTool {
             properties.put("error", "Environment is not an instance of ConfigurableEnvironment");
         }
 
+        long duration = System.currentTimeMillis() - startTime;
+        logger.info("Application properties fetched: {} properties in {}ms", properties.size(), duration);
+        
         return properties;
     }
 

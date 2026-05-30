@@ -1,5 +1,7 @@
 package com.example.mcp.tools;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -17,22 +19,32 @@ import java.util.*;
  */
 public class DeveloperOnboardingTools {
 
+    private static final Logger logger = LoggerFactory.getLogger(DeveloperOnboardingTools.class);
+    
     private final ApplicationContext applicationContext;
     private final Environment environment;
 
     public DeveloperOnboardingTools(ApplicationContext applicationContext, Environment environment) {
         this.applicationContext = applicationContext;
         this.environment = environment;
+        logger.debug("DeveloperOnboardingTools initialized");
     }
 
     /**
      * Lists the file tree of the codebase, skipping common build/config/IDE directories.
      */
     public String getProjectStructure() {
+        logger.info("Fetching project structure...");
+        long startTime = System.currentTimeMillis();
+        
         File rootDir = new File(".").getAbsoluteFile();
         StringBuilder sb = new StringBuilder();
         sb.append("Project Structure for: ").append(rootDir.getName()).append("\n");
         buildFileTree(rootDir, 0, sb);
+        
+        long duration = System.currentTimeMillis() - startTime;
+        logger.info("Project structure fetched in {}ms", duration);
+        
         return sb.toString();
     }
 
@@ -81,14 +93,19 @@ public class DeveloperOnboardingTools {
      * Filters out Spring framework internal beans to show only user-defined beans.
      */
     public Map<String, Object> getSpringBeans() {
+        logger.info("Fetching Spring beans...");
+        long startTime = System.currentTimeMillis();
+        
         Map<String, Object> beanMap = new TreeMap<>();
         String[] beanNames = applicationContext.getBeanDefinitionNames();
+        logger.debug("Found {} total bean definitions", beanNames.length);
 
         ConfigurableListableBeanFactory beanFactory = null;
         if (applicationContext instanceof ConfigurableApplicationContext) {
             beanFactory = ((ConfigurableApplicationContext) applicationContext).getBeanFactory();
         }
 
+        int processedCount = 0;
         for (String name : beanNames) {
             Class<?> type = applicationContext.getType(name);
             String className = type != null ? type.getName() : "";
@@ -119,8 +136,13 @@ public class DeveloperOnboardingTools {
             }
 
             beanMap.put(name, beanDetails);
+            processedCount++;
         }
 
+        long duration = System.currentTimeMillis() - startTime;
+        logger.info("Spring beans fetched: {} user beans found (from {} total) in {}ms", 
+                processedCount, beanNames.length, duration);
+        
         return beanMap;
     }
 
@@ -159,17 +181,24 @@ public class DeveloperOnboardingTools {
      * Inspects active database DataSource and extracts database schema metadata (tables, columns, types).
      */
     public Map<String, Object> getDatabaseMetadata() {
+        logger.info("Fetching database metadata...");
+        long startTime = System.currentTimeMillis();
+        
         Map<String, Object> dbMetadata = new TreeMap<>();
         
         try {
             DataSource dataSource = applicationContext.getBean(DataSource.class);
+            logger.debug("DataSource found, connecting...");
+            
             try (Connection conn = dataSource.getConnection()) {
                 DatabaseMetaData metaData = conn.getMetaData();
                 dbMetadata.put("databaseProduct", metaData.getDatabaseProductName());
                 dbMetadata.put("databaseVersion", metaData.getDatabaseProductVersion());
+                logger.debug("Connected to {} {}", metaData.getDatabaseProductName(), metaData.getDatabaseProductVersion());
 
                 Map<String, List<Map<String, String>>> tables = new TreeMap<>();
                 try (ResultSet rs = metaData.getTables(null, null, "%", new String[]{"TABLE"})) {
+                    int tableCount = 0;
                     while (rs.next()) {
                         String tableName = rs.getString("TABLE_NAME");
                         List<Map<String, String>> columns = new ArrayList<>();
@@ -186,15 +215,21 @@ public class DeveloperOnboardingTools {
                         }
 
                         tables.put(tableName, columns);
+                        tableCount++;
                     }
+                    logger.debug("Found {} tables", tableCount);
                 }
                 dbMetadata.put("tables", tables);
             }
         } catch (Exception e) {
+            logger.warn("Failed to fetch database metadata: {}", e.getMessage());
             dbMetadata.put("status", "No active DataSource or unable to connect");
             dbMetadata.put("error", e.getMessage() != null ? e.getMessage() : e.toString());
         }
 
+        long duration = System.currentTimeMillis() - startTime;
+        logger.info("Database metadata fetched in {}ms", duration);
+        
         return dbMetadata;
     }
 

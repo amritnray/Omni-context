@@ -41,6 +41,7 @@ public class McpServerManager {
         this.context = context;
         this.environment = environment;
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+        logger.info("McpServerManager created");
     }
 
     public synchronized void startServer(McpServerTransportProvider transport) {
@@ -58,6 +59,7 @@ public class McpServerManager {
             this.onboardingTools = new DeveloperOnboardingTools(context, environment);
             this.commandCodeTool = new CommandCodeTool();
 
+            logger.info("Creating MCP server instance...");
             this.mcpServer = McpServer.sync(transport)
                     .serverInfo("AutoMCP-Starter", "1.0.0")
                     .capabilities(McpSchema.ServerCapabilities.builder()
@@ -66,7 +68,10 @@ public class McpServerManager {
                             .build())
                     .build();
 
+            logger.info("Registering standard MCP tools...");
             registerStandardTools();
+            
+            logger.info("Registering dynamic REST tools...");
             registerDynamicRestTools();
 
             McpLogAppender.setLogListener(notification -> {
@@ -77,7 +82,7 @@ public class McpServerManager {
                 } catch (Exception ignored) {}
             });
 
-            logger.info("MCP Server successfully started.");
+            logger.info("MCP Server successfully started with all tools registered.");
         } catch (Exception e) {
             logger.error("Failed to start MCP Server", e);
         }
@@ -102,6 +107,7 @@ public class McpServerManager {
     }
 
     private void registerStandardTools() {
+        logger.debug("Registering tool: get_application_properties");
         registerSyncTool(
             "get_application_properties",
             "AutoMCP-Starter tool that lists Spring active properties with passwords, secrets, and keys automatically masked.",
@@ -112,6 +118,7 @@ public class McpServerManager {
             }
         );
 
+        logger.debug("Registering tool: get_project_readme");
         registerSyncTool(
             "get_project_readme",
             "AutoMCP-Starter tool that exposes the target application root README.md for architecture and data-flow analysis.",
@@ -122,6 +129,7 @@ public class McpServerManager {
             }
         );
 
+        logger.debug("Registering tool: get_project_structure");
         registerSyncTool(
             "get_project_structure",
             "AutoMCP-Starter tool that lists the repository structure while excluding common build and IDE folders.",
@@ -132,6 +140,7 @@ public class McpServerManager {
             }
         );
 
+        logger.debug("Registering tool: get_spring_beans");
         registerSyncTool(
             "get_spring_beans",
             "AutoMCP-Starter tool that lists custom Spring beans active in the context with class types and dependencies.",
@@ -142,6 +151,7 @@ public class McpServerManager {
             }
         );
 
+        logger.debug("Registering tool: get_database_metadata");
         registerSyncTool(
             "get_database_metadata",
             "AutoMCP-Starter tool that inspects the active DataSource and extracts database tables, columns, nullability, and types.",
@@ -152,6 +162,7 @@ public class McpServerManager {
             }
         );
 
+        logger.debug("Registering tool: get_app_health");
         registerSyncTool(
             "get_app_health",
             "AutoMCP-Starter tool that exposes JVM metrics and current Spring profile information.",
@@ -162,6 +173,7 @@ public class McpServerManager {
             }
         );
 
+        logger.debug("Registering tool: get_recent_logs");
         registerSyncTool(
             "get_recent_logs",
             "AutoMCP-Starter tool that retrieves the last 200 buffered log records from the running target application.",
@@ -173,6 +185,7 @@ public class McpServerManager {
             }
         );
 
+        logger.debug("Registering tool: list_rest_endpoints");
         registerSyncTool(
             "list_rest_endpoints",
             "AutoMCP-Starter tool that lists Spring controller REST endpoints with paths, methods, parameters, and request/response schemas.",
@@ -183,6 +196,7 @@ public class McpServerManager {
             }
         );
 
+        logger.debug("Registering tool: call_rest_endpoint");
         registerSyncTool(
             "call_rest_endpoint",
             "AutoMCP-Starter tool that invokes REST endpoints of the running target application locally. Required args: method, path. Optional args: headers, queryParams, body.",
@@ -214,6 +228,7 @@ public class McpServerManager {
             }
         );
 
+        logger.debug("Registering tool: command_code_login");
         registerSyncTool(
             "command_code_login",
             "Authenticates the environment with Command Code CLI. Accepts an optional 'apiKey' parameter. If omitted, starts interactive browser login and returns the URL.",
@@ -235,6 +250,7 @@ public class McpServerManager {
             }
         );
 
+        logger.debug("Registering tool: command_code_status");
         registerSyncTool(
             "command_code_status",
             "Checks if the local system is currently authenticated with the Command Code CLI.",
@@ -244,12 +260,20 @@ public class McpServerManager {
                 return new CallToolResult(List.of(new TextContent(toJson(res))), false);
             }
         );
+        
+        logger.info("All standard MCP tools registered successfully");
     }
 
     private void registerDynamicRestTools() {
         try {
+            logger.info("Starting dynamic REST tool registration...");
+            long startTime = System.currentTimeMillis();
+            
             Set<String> registeredToolNames = new HashSet<>();
             List<Map<String, Object>> endpoints = restEndpointsTool.listRestEndpoints();
+            
+            logger.info("Found {} endpoints to register as dynamic tools", endpoints.size());
+            
             for (Map<String, Object> endpoint : endpoints) {
                 String path = (String) endpoint.get("path");
                 String method = (String) endpoint.get("method");
@@ -313,6 +337,8 @@ public class McpServerManager {
                 String finalPath = path;
                 Map<String, Map<String, Object>> finalParameters = parameters;
 
+                logger.debug("Registering dynamic tool: {} for {} {}", toolName, method, path);
+
                 registerSyncTool(
                     finalToolName,
                     finalDescription,
@@ -352,6 +378,9 @@ public class McpServerManager {
                     }
                 );
             }
+            
+            long duration = System.currentTimeMillis() - startTime;
+            logger.info("Dynamic REST tool registration completed: {} tools registered in {}ms", registeredToolNames.size(), duration);
         } catch (Exception e) {
             logger.error("Failed to register dynamic REST tools", e);
         }
@@ -360,7 +389,32 @@ public class McpServerManager {
     private void registerSyncTool(String name, String description, String jsonSchema,
             java.util.function.BiFunction<io.modelcontextprotocol.server.McpSyncServerExchange, Map<String, Object>, CallToolResult> handler) {
         Tool tool = new Tool(name, description, jsonSchema);
-        mcpServer.addTool(new SyncToolSpecification(tool, handler));
+        
+        // Wrap the handler with logging and timing
+        java.util.function.BiFunction<io.modelcontextprotocol.server.McpSyncServerExchange, Map<String, Object>, CallToolResult> wrappedHandler = 
+            (exchange, args) -> {
+                long startTime = System.currentTimeMillis();
+                logger.info("MCP tool '{}' execution started", name);
+                logger.debug("MCP tool '{}' called with args: {}", name, args);
+                
+                try {
+                    CallToolResult result = handler.apply(exchange, args);
+                    long duration = System.currentTimeMillis() - startTime;
+                    logger.info("MCP tool '{}' completed successfully in {}ms", name, duration);
+                    
+                    if (duration > 30000) {
+                        logger.warn("MCP tool '{}' execution took {}ms which exceeds 30 seconds", name, duration);
+                    }
+                    
+                    return result;
+                } catch (Exception e) {
+                    long duration = System.currentTimeMillis() - startTime;
+                    logger.error("MCP tool '{}' failed after {}ms: {}", name, duration, e.getMessage(), e);
+                    throw e;
+                }
+            };
+        
+        mcpServer.addTool(new SyncToolSpecification(tool, wrappedHandler));
     }
 
     private List<String> getRecentLogsFromAppender() {
@@ -383,6 +437,7 @@ public class McpServerManager {
         try {
             return objectMapper.writeValueAsString(obj);
         } catch (Exception e) {
+            logger.error("JSON serialization failed: {}", e.getMessage());
             return "{\"error\":\"Serialization failed: " + e.getMessage() + "\"}";
         }
     }

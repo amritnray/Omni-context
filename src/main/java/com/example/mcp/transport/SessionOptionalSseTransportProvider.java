@@ -180,15 +180,28 @@ public class SessionOptionalSseTransportProvider implements McpServerTransportPr
 
         try {
             String body = request.body(String.class);
+            logger.debug("Received message on /mcp/message endpoint ({} bytes)", body.length());
+            
+            long startTime = System.currentTimeMillis();
             JSONRPCMessage message = McpSchema.deserializeJsonRpcMessage(objectMapper, body);
+            
+            logger.debug("Deserialized message, handling...");
             session.handle(message).block();
+            
+            long duration = System.currentTimeMillis() - startTime;
+            logger.debug("Message handled successfully in {}ms", duration);
+            
+            if (duration > 30000) {
+                logger.warn("Message handling took {}ms which exceeds 30 seconds", duration);
+            }
+            
             return ServerResponse.ok().build();
         } catch (IllegalArgumentException | java.io.IOException e) {
             logger.error("Failed to deserialize message: {}", e.getMessage());
             return ServerResponse.badRequest()
                     .body(new McpError("Invalid message format"));
         } catch (Exception e) {
-            logger.error("Error handling message: {}", e.getMessage());
+            logger.error("Error handling message: {}", e.getMessage(), e);
             return ServerResponse.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new McpError(e.getMessage()));
         }

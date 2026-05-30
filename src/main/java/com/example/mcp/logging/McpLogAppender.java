@@ -4,6 +4,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
 import io.modelcontextprotocol.spec.McpSchema.LoggingLevel;
 import io.modelcontextprotocol.spec.McpSchema.LoggingMessageNotification;
+import org.slf4j.LoggerFactory;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -11,11 +12,14 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 public class McpLogAppender extends AppenderBase<ILoggingEvent> {
 
     private static final int BUFFER_SIZE = 200;
+    private static final org.slf4j.Logger selfLogger = LoggerFactory.getLogger(McpLogAppender.class);
+    private final AtomicLong logsProcessed = new AtomicLong(0);
     
     private final List<String> logBuffer = Collections.synchronizedList(new LinkedList<String>() {
         @Override
@@ -49,6 +53,11 @@ public class McpLogAppender extends AppenderBase<ILoggingEvent> {
                 loggerName.startsWith("org.apache.catalina") ||
                 loggerName.startsWith("org.apache.coyote"))) {
             return;
+        }
+
+        long processed = logsProcessed.incrementAndGet();
+        if (processed % 100 == 0) {
+            selfLogger.debug("McpLogAppender has processed {} log events, buffer size: {}", processed, logBuffer.size());
         }
 
         String formattedMessage = eventObject.getFormattedMessage();
@@ -92,6 +101,7 @@ public class McpLogAppender extends AppenderBase<ILoggingEvent> {
     }
 
     public List<String> getRecentLogs() {
+        selfLogger.debug("Retrieving {} recent logs from buffer", logBuffer.size());
         return new ArrayList<>(logBuffer);
     }
 }

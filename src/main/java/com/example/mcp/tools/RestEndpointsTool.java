@@ -1,6 +1,8 @@
 package com.example.mcp.tools;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.MethodParameter;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,6 +22,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.*;
 
 /**
@@ -28,6 +31,8 @@ import java.util.*;
  */
 public class RestEndpointsTool {
 
+    private static final Logger logger = LoggerFactory.getLogger(RestEndpointsTool.class);
+    
     private final ApplicationContext context;
     private final ObjectMapper objectMapper;
     private Integer localServerPort;
@@ -35,6 +40,7 @@ public class RestEndpointsTool {
     public RestEndpointsTool(ApplicationContext context, ObjectMapper objectMapper) {
         this.context = context;
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+        logger.debug("RestEndpointsTool initialized");
     }
 
     public void setLocalServerPort(int port) {
@@ -45,25 +51,38 @@ public class RestEndpointsTool {
      * Scans and returns details of all REST endpoints in a Swagger-like format.
      */
     public List<Map<String, Object>> listRestEndpoints() {
+        long startTime = System.currentTimeMillis();
+        logger.info("Starting REST endpoint discovery...");
+        
         List<Map<String, Object>> endpoints = new ArrayList<>();
         RequestMappingHandlerMapping mapping = getHandlerMapping();
 
         if (mapping == null) {
+            logger.warn("RequestMappingHandlerMapping not available, returning empty endpoint list");
             return endpoints;
         }
 
         Map<RequestMappingInfo, HandlerMethod> handlerMethods = mapping.getHandlerMethods();
+        logger.debug("Found {} handler methods to process", handlerMethods.size());
+        
+        int processedCount = 0;
+        int skippedCount = 0;
+        
         for (Map.Entry<RequestMappingInfo, HandlerMethod> entry : handlerMethods.entrySet()) {
             RequestMappingInfo mappingInfo = entry.getKey();
             HandlerMethod handlerMethod = entry.getValue();
 
             // Ignore our own internal MCP endpoints
             if (handlerMethod.getBeanType().getName().contains("com.example.mcp")) {
+                logger.trace("Skipping internal MCP endpoint: {}", handlerMethod.getBeanType().getSimpleName());
+                skippedCount++;
                 continue;
             }
 
             // Ignore Spring Boot's default error controller to reduce noise
             if (handlerMethod.getBeanType().getName().contains("BasicErrorController")) {
+                logger.trace("Skipping BasicErrorController endpoint");
+                skippedCount++;
                 continue;
             }
 
@@ -107,10 +126,26 @@ public class RestEndpointsTool {
                     }
 
                     endpoints.add(endpointDetails);
+                    processedCount++;
+                    
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Processed endpoint: {} {} -> {}.{}", 
+                                httpMethod, path, 
+                                handlerMethod.getBeanType().getSimpleName(), 
+                                handlerMethod.getMethod().getName());
+                    }
                 }
             }
         }
 
+        long duration = System.currentTimeMillis() - startTime;
+        logger.info("REST endpoint discovery completed: found {} endpoints (skipped {} internal) in {}ms", 
+                endpoints.size(), skippedCount, duration);
+        
+        if (duration > 5000) {
+            logger.warn("REST endpoint discovery took {}ms which exceeds 5 seconds. This may cause MCP client timeouts.", duration);
+        }
+        
         return endpoints;
     }
 
@@ -118,6 +153,9 @@ public class RestEndpointsTool {
      * Executes a REST endpoint locally.
      */
     public Map<String, Object> callRestEndpoint(String method, String path, Map<String, String> headers, Map<String, String> queryParams, String body) {
+        long startTime = System.currentTimeMillis();
+        logger.info("Executing REST endpoint call: {} {}", method, path);
+        
         Map<String, Object> responseMap = new LinkedHashMap<>();
         
         if (localServerPort == null || localServerPort <= 0) {
@@ -156,9 +194,15 @@ public class RestEndpointsTool {
                 }
             }
 
-            HttpClient client = HttpClient.newBuilder().build();
+            String url = urlBuilder.toString();
+            logger.debug("Calling URL: {}", url);
+            
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(10))
+                    .build();
             HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-                    .uri(URI.create(urlBuilder.toString()));
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(30));
 
             // Set Body
             HttpRequest.BodyPublisher bodyPublisher;
@@ -179,7 +223,13 @@ public class RestEndpointsTool {
                 }
             }
 
+            logger.debug("Sending HTTP request...");
+            long requestStart = System.currentTimeMillis();
+            
             HttpResponse<String> response = client.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString());
+
+            long requestDuration = System.currentTimeMillis() - requestStart;
+            logger.debug("HTTP response received in {}ms with status: {}", requestDuration, response.statusCode());
 
             responseMap.put("status", response.statusCode());
             
@@ -197,10 +247,19 @@ public class RestEndpointsTool {
             }
 
         } catch (Exception e) {
+            long duration = System.currentTimeMillis() - startTime;
+            logger.error("REST endpoint call failed for {} {} after {}ms: {}", method, path, duration, e.getMessage(), e);
             responseMap.put("error", "Failed to execute call");
             responseMap.put("details", e.getMessage() != null ? e.getMessage() : e.toString());
         }
 
+        long totalDuration = System.currentTimeMillis() - startTime;
+        logger.info("REST endpoint call completed: {} {} in {}ms", method, path, totalDuration);
+        
+        if (totalDuration > 10000) {
+            logger.warn("REST endpoint call took {}ms which is unusually long", totalDuration);
+        }
+        
         return responseMap;
     }
 

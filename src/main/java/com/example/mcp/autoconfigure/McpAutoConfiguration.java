@@ -45,12 +45,17 @@ public class McpAutoConfiguration {
         SimpleModule mcpModule = new SimpleModule("McpCompatibilityModule");
         mcpModule.addDeserializer(LoggingLevel.class, new McpLoggingLevelDeserializer());
         this.objectMapper.registerModule(mcpModule);
+        
+        logger.info("McpAutoConfiguration initialized");
     }
 
     @Bean
     public McpServerManager mcpServerManager() {
+        logger.info("Creating McpServerManager bean...");
         registerMcpLogAppender();
-        return new McpServerManager(context, environment, objectMapper);
+        McpServerManager manager = new McpServerManager(context, environment, objectMapper);
+        logger.info("McpServerManager bean created successfully");
+        return manager;
     }
 
     @Bean
@@ -60,6 +65,7 @@ public class McpAutoConfiguration {
             logger.info("Captured dynamic running server port: {}", port);
             if (manager.getRestEndpointsTool() != null) {
                 manager.getRestEndpointsTool().setLocalServerPort(port);
+                logger.info("Set local server port to {} for REST endpoint calls", port);
             }
         };
     }
@@ -151,6 +157,7 @@ public class McpAutoConfiguration {
             ch.qos.logback.classic.Logger rootLogger = ctx.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
 
             if (rootLogger.getAppender("McpLogAppender") != null) {
+                logger.debug("McpLogAppender already registered, skipping");
                 return;
             }
 
