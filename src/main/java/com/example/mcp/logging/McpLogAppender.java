@@ -114,7 +114,9 @@ public class McpLogAppender extends AppenderBase<ILoggingEvent> {
         try {
             ch.qos.logback.classic.LoggerContext ctx = (ch.qos.logback.classic.LoggerContext) org.slf4j.LoggerFactory.getILoggerFactory();
             ch.qos.logback.classic.Logger rootLogger = ctx.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
-            for (ch.qos.logback.core.Appender<ILoggingEvent> appender : rootLogger.iteratorForAppenders()) {
+            java.util.Iterator<ch.qos.logback.core.Appender<ILoggingEvent>> iterator = rootLogger.iteratorForAppenders();
+            while (iterator.hasNext()) {
+                ch.qos.logback.core.Appender<ILoggingEvent> appender = iterator.next();
                 if (appender instanceof McpLogAppender) {
                     return (McpLogAppender) appender;
                 }

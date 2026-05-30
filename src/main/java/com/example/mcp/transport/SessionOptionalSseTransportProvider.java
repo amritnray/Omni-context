@@ -237,7 +237,7 @@ public class SessionOptionalSseTransportProvider implements McpServerTransportPr
         public Mono<Void> sendMessage(JSONRPCMessage message) {
             return Mono.fromRunnable(() -> {
                 try {
-                    String jsonText = jsonMapper.toString(message);
+                    String jsonText = objectMapper.writeValueAsString(message);
                     sseBuilder.id(sessionId);
                     sseBuilder.event(MESSAGE_EVENT_TYPE);
                     sseBuilder.data(jsonText);
