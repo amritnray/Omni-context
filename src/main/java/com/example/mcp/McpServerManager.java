@@ -10,7 +10,6 @@ import com.example.mcp.tools.ErrorSummaryTool;
 import com.example.mcp.tools.JpaEntityInfoTool;
 import com.example.mcp.tools.MemoryDetailsTool;
 import com.example.mcp.tools.ScheduledTasksTool;
-import com.example.mcp.tools.SourceCodeReaderTool;
 import com.example.mcp.tools.ThreadDumpTool;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
@@ -48,7 +47,6 @@ public class McpServerManager {
     private ScheduledTasksTool scheduledTasksTool;
     private ErrorSummaryTool errorSummaryTool;
     private JpaEntityInfoTool jpaEntityInfoTool;
-    private SourceCodeReaderTool sourceCodeReaderTool;
 
     public McpServerManager(ApplicationContext context, Environment environment, ObjectMapper objectMapper) {
         this.context = context;
@@ -76,7 +74,6 @@ public class McpServerManager {
             this.scheduledTasksTool = new ScheduledTasksTool(context, environment);
             this.errorSummaryTool = new ErrorSummaryTool();
             this.jpaEntityInfoTool = new JpaEntityInfoTool(context);
-            this.sourceCodeReaderTool = new SourceCodeReaderTool();
 
             logger.info("Creating MCP server instance...");
             this.mcpServer = McpServer.sync(transport)
@@ -331,83 +328,6 @@ public class McpServerManager {
             "{\"type\":\"object\",\"properties\":{}}",
             (exchange, args) -> {
                 Map<String, Object> res = jpaEntityInfoTool.getJpaEntityInfo();
-                return new CallToolResult(List.of(new TextContent(toJson(res))), false);
-            }
-        );
-
-        logger.debug("Registering tool: list_source_files");
-        registerSyncTool(
-            "list_source_files",
-            "AutoMCP-Starter tool that lists all source code files in the project, excluding common build and IDE folders.",
-            "{\"type\":\"object\",\"properties\":{}}",
-            (exchange, args) -> {
-                Map<String, Object> res = sourceCodeReaderTool.listSourceFiles();
-                return new CallToolResult(List.of(new TextContent(toJson(res))), false);
-            }
-        );
-
-        logger.debug("Registering tool: read_source_file");
-        registerSyncTool(
-            "read_source_file",
-            "AutoMCP-Starter tool that reads the content of a specific source file. Required arg: filePath.",
-            "{\n" +
-            "  \"type\": \"object\",\n" +
-            "  \"properties\": {\n" +
-            "    \"filePath\": { \"type\": \"string\", \"description\": \"Path to the source file to read\" }\n" +
-            "  },\n" +
-            "  \"required\": [\"filePath\"]\n" +
-            "}",
-            (exchange, args) -> {
-                String filePath = (String) args.get("filePath");
-                Map<String, Object> res = sourceCodeReaderTool.readSourceFile(filePath);
-                return new CallToolResult(List.of(new TextContent(toJson(res))), false);
-            }
-        );
-
-        logger.debug("Registering tool: read_source_files");
-        registerSyncTool(
-            "read_source_files",
-            "AutoMCP-Starter tool that reads multiple source files. Required arg: filePaths (array of file paths).",
-            "{\n" +
-            "  \"type\": \"object\",\n" +
-            "  \"properties\": {\n" +
-            "    \"filePaths\": { \n" +
-            "      \"type\": \"array\", \n" +
-            "      \"items\": { \"type\": \"string\" },\n" +
-            "      \"description\": \"Array of file paths to read\" \n" +
-            "    }\n" +
-            "  },\n" +
-            "  \"required\": [\"filePaths\"]\n" +
-            "}",
-            (exchange, args) -> {
-                @SuppressWarnings("unchecked")
-                List<String> filePaths = (List<String>) args.get("filePaths");
-                Map<String, Object> res = sourceCodeReaderTool.readSourceFiles(filePaths);
-                return new CallToolResult(List.of(new TextContent(toJson(res))), false);
-            }
-        );
-
-        logger.debug("Registering tool: search_source_files");
-        registerSyncTool(
-            "search_source_files",
-            "AutoMCP-Starter tool that searches for text in source files. Required arg: searchText. Optional arg: fileExtensions (array of extensions without dots).",
-            "{\n" +
-            "  \"type\": \"object\",\n" +
-            "  \"properties\": {\n" +
-            "    \"searchText\": { \"type\": \"string\", \"description\": \"Text to search for in source files\" },\n" +
-            "    \"fileExtensions\": { \n" +
-            "      \"type\": \"array\", \n" +
-            "      \"items\": { \"type\": \"string\" },\n" +
-            "      \"description\": \"Optional array of file extensions to search in (e.g., [\\\"java\\\", \\\"js\\\"])\" \n" +
-            "    }\n" +
-            "  },\n" +
-            "  \"required\": [\"searchText\"]\n" +
-            "}",
-            (exchange, args) -> {
-                String searchText = (String) args.get("searchText");
-                @SuppressWarnings("unchecked")
-                List<String> fileExtensions = (List<String>) args.get("fileExtensions");
-                Map<String, Object> res = sourceCodeReaderTool.searchFiles(searchText, fileExtensions);
                 return new CallToolResult(List.of(new TextContent(toJson(res))), false);
             }
         );
