@@ -1,0 +1,61 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'com.example'
+version = '1.0.0'
+description = 'AutoMCP-Starter: zero-configuration MCP observability and application context tooling for Spring Boot services.'
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    maven { url = uri('https://repo.spring.io/milestone') }
+}
+
+dependencies {
+    compileOnly 'org.springframework.boot:spring-boot-starter-web:3.4.3'
+    compileOnly 'org.springframework.boot:spring-boot-starter-data-jpa:3.4.3'
+
+    api 'io.modelcontextprotocol.sdk:mcp:0.10.0'
+    api 'io.modelcontextprotocol.sdk:mcp-spring-webmvc:0.10.0'
+
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+    
+    compileOnly 'org.slf4j:slf4j-api:2.0.12'
+    compileOnly 'ch.qos.logback:logback-classic:1.5.6'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            pom {
+                name = 'spring-boot-mcp-starter'
+                description = project.description
+            }
+        }
+    }
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('publishToMavenLocal')
+}
+
+shadowJar {
+    archiveClassifier.set('')
+    configurations = [project.configurations.runtimeClasspath]
+}
+
+jar.enabled = false
+assemble.dependsOn shadowJar
