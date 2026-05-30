@@ -6,7 +6,14 @@ import com.example.mcp.tools.PropertiesTool;
 import com.example.mcp.tools.ReadmeTool;
 import com.example.mcp.tools.RestEndpointsTool;
 import com.example.mcp.tools.CommandCodeTool;
+import com.example.mcp.tools.ErrorSummaryTool;
+import com.example.mcp.tools.JpaEntityInfoTool;
+import com.example.mcp.tools.MemoryDetailsTool;
+import com.example.mcp.tools.ScheduledTasksTool;
+import com.example.mcp.tools.SourceCodeReaderTool;
+import com.example.mcp.tools.ThreadDumpTool;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 import io.modelcontextprotocol.server.McpSyncServer;
@@ -36,6 +43,12 @@ public class McpServerManager {
     private ReadmeTool readmeTool;
     private DeveloperOnboardingTools onboardingTools;
     private CommandCodeTool commandCodeTool;
+    private ThreadDumpTool threadDumpTool;
+    private MemoryDetailsTool memoryDetailsTool;
+    private ScheduledTasksTool scheduledTasksTool;
+    private ErrorSummaryTool errorSummaryTool;
+    private JpaEntityInfoTool jpaEntityInfoTool;
+    private SourceCodeReaderTool sourceCodeReaderTool;
 
     public McpServerManager(ApplicationContext context, Environment environment, ObjectMapper objectMapper) {
         this.context = context;
@@ -57,7 +70,13 @@ public class McpServerManager {
             this.propertiesTool = new PropertiesTool(environment);
             this.readmeTool = new ReadmeTool();
             this.onboardingTools = new DeveloperOnboardingTools(context, environment);
-            this.commandCodeTool = new CommandCodeTool();
+            this.commandCodeTool = new CommandCodeTool(objectMapper);
+            this.threadDumpTool = new ThreadDumpTool();
+            this.memoryDetailsTool = new MemoryDetailsTool();
+            this.scheduledTasksTool = new ScheduledTasksTool(context, environment);
+            this.errorSummaryTool = new ErrorSummaryTool();
+            this.jpaEntityInfoTool = new JpaEntityInfoTool(context);
+            this.sourceCodeReaderTool = new SourceCodeReaderTool();
 
             logger.info("Creating MCP server instance...");
             this.mcpServer = McpServer.sync(transport)
@@ -260,7 +279,139 @@ public class McpServerManager {
                 return new CallToolResult(List.of(new TextContent(toJson(res))), false);
             }
         );
-        
+
+        logger.debug("Registering tool: get_thread_dump");
+        registerSyncTool(
+            "get_thread_dump",
+            "Captures a JVM thread dump showing all threads, their states, lock information, stack traces, and detected deadlocks. Critical for diagnosing hangs and contention.",
+            "{\"type\":\"object\",\"properties\":{}}",
+            (exchange, args) -> {
+                Map<String, Object> res = threadDumpTool.getThreadDump();
+                return new CallToolResult(List.of(new TextContent(toJson(res))), false);
+            }
+        );
+
+        logger.debug("Registering tool: get_memory_details");
+        registerSyncTool(
+            "get_memory_details",
+            "Detailed JVM memory analysis including heap/non-heap pools with usage percentages, per-pool breakdown, and garbage collector statistics. Supplements get_app_health.",
+            "{\"type\":\"object\",\"properties\":{}}",
+            (exchange, args) -> {
+                Map<String, Object> res = memoryDetailsTool.getMemoryDetails();
+                return new CallToolResult(List.of(new TextContent(toJson(res))), false);
+            }
+        );
+
+        logger.debug("Registering tool: get_scheduled_tasks");
+        registerSyncTool(
+            "get_scheduled_tasks",
+            "Discovers @Scheduled methods, TaskScheduler beans, and @Async methods. Shows cron expressions, fixed delays/rates, and executor configurations for understanding background task behavior.",
+            "{\"type\":\"object\",\"properties\":{}}",
+            (exchange, args) -> {
+                Map<String, Object> res = scheduledTasksTool.getScheduledTasks();
+                return new CallToolResult(List.of(new TextContent(toJson(res))), false);
+            }
+        );
+
+        logger.debug("Registering tool: get_error_summary");
+        registerSyncTool(
+            "get_error_summary",
+            "Analyzes the log buffer for ERROR and WARN entries, groups them by exception class with occurrence counts and latest timestamps. Complements get_recent_logs for focused error diagnosis.",
+            "{\"type\":\"object\",\"properties\":{}}",
+            (exchange, args) -> {
+                Map<String, Object> res = errorSummaryTool.getErrorSummary();
+                return new CallToolResult(List.of(new TextContent(toJson(res))), false);
+            }
+        );
+
+        logger.debug("Registering tool: get_jpa_entity_info");
+        registerSyncTool(
+            "get_jpa_entity_info",
+            "Scans JPA @Entity classes and shows table mappings, field definitions, column details, and relationship annotations (@OneToMany, @ManyToOne, etc.). Returns gracefully if JPA is not on the classpath.",
+            "{\"type\":\"object\",\"properties\":{}}",
+            (exchange, args) -> {
+                Map<String, Object> res = jpaEntityInfoTool.getJpaEntityInfo();
+                return new CallToolResult(List.of(new TextContent(toJson(res))), false);
+            }
+        );
+
+        logger.debug("Registering tool: list_source_files");
+        registerSyncTool(
+            "list_source_files",
+            "AutoMCP-Starter tool that lists all source code files in the project, excluding common build and IDE folders.",
+            "{\"type\":\"object\",\"properties\":{}}",
+            (exchange, args) -> {
+                Map<String, Object> res = sourceCodeReaderTool.listSourceFiles();
+                return new CallToolResult(List.of(new TextContent(toJson(res))), false);
+            }
+        );
+
+        logger.debug("Registering tool: read_source_file");
+        registerSyncTool(
+            "read_source_file",
+            "AutoMCP-Starter tool that reads the content of a specific source file. Required arg: filePath.",
+            "{\n" +
+            "  \"type\": \"object\",\n" +
+            "  \"properties\": {\n" +
+            "    \"filePath\": { \"type\": \"string\", \"description\": \"Path to the source file to read\" }\n" +
+            "  },\n" +
+            "  \"required\": [\"filePath\"]\n" +
+            "}",
+            (exchange, args) -> {
+                String filePath = (String) args.get("filePath");
+                Map<String, Object> res = sourceCodeReaderTool.readSourceFile(filePath);
+                return new CallToolResult(List.of(new TextContent(toJson(res))), false);
+            }
+        );
+
+        logger.debug("Registering tool: read_source_files");
+        registerSyncTool(
+            "read_source_files",
+            "AutoMCP-Starter tool that reads multiple source files. Required arg: filePaths (array of file paths).",
+            "{\n" +
+            "  \"type\": \"object\",\n" +
+            "  \"properties\": {\n" +
+            "    \"filePaths\": { \n" +
+            "      \"type\": \"array\", \n" +
+            "      \"items\": { \"type\": \"string\" },\n" +
+            "      \"description\": \"Array of file paths to read\" \n" +
+            "    }\n" +
+            "  },\n" +
+            "  \"required\": [\"filePaths\"]\n" +
+            "}",
+            (exchange, args) -> {
+                @SuppressWarnings("unchecked")
+                List<String> filePaths = (List<String>) args.get("filePaths");
+                Map<String, Object> res = sourceCodeReaderTool.readSourceFiles(filePaths);
+                return new CallToolResult(List.of(new TextContent(toJson(res))), false);
+            }
+        );
+
+        logger.debug("Registering tool: search_source_files");
+        registerSyncTool(
+            "search_source_files",
+            "AutoMCP-Starter tool that searches for text in source files. Required arg: searchText. Optional arg: fileExtensions (array of extensions without dots).",
+            "{\n" +
+            "  \"type\": \"object\",\n" +
+            "  \"properties\": {\n" +
+            "    \"searchText\": { \"type\": \"string\", \"description\": \"Text to search for in source files\" },\n" +
+            "    \"fileExtensions\": { \n" +
+            "      \"type\": \"array\", \n" +
+            "      \"items\": { \"type\": \"string\" },\n" +
+            "      \"description\": \"Optional array of file extensions to search in (e.g., [\\\"java\\\", \\\"js\\\"])\" \n" +
+            "    }\n" +
+            "  },\n" +
+            "  \"required\": [\"searchText\"]\n" +
+            "}",
+            (exchange, args) -> {
+                String searchText = (String) args.get("searchText");
+                @SuppressWarnings("unchecked")
+                List<String> fileExtensions = (List<String>) args.get("fileExtensions");
+                Map<String, Object> res = sourceCodeReaderTool.searchFiles(searchText, fileExtensions);
+                return new CallToolResult(List.of(new TextContent(toJson(res))), false);
+            }
+        );
+
         logger.info("All standard MCP tools registered successfully");
     }
 
@@ -388,7 +539,8 @@ public class McpServerManager {
 
     private void registerSyncTool(String name, String description, String jsonSchema,
             java.util.function.BiFunction<io.modelcontextprotocol.server.McpSyncServerExchange, Map<String, Object>, CallToolResult> handler) {
-        Tool tool = new Tool(name, description, jsonSchema);
+        Tool tool = Tool.builder().name(name).description(description)
+                .inputSchema(new JacksonMcpJsonMapper(this.objectMapper), jsonSchema).build();
         
         // Wrap the handler with logging and timing
         java.util.function.BiFunction<io.modelcontextprotocol.server.McpSyncServerExchange, Map<String, Object>, CallToolResult> wrappedHandler = 
@@ -418,18 +570,10 @@ public class McpServerManager {
     }
 
     private List<String> getRecentLogsFromAppender() {
-        try {
-            ch.qos.logback.classic.LoggerContext ctx = (ch.qos.logback.classic.LoggerContext) org.slf4j.LoggerFactory.getILoggerFactory();
-            ch.qos.logback.classic.Logger rootLogger = ctx.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
-
-            Iterator<ch.qos.logback.core.Appender<ch.qos.logback.classic.spi.ILoggingEvent>> iterator = rootLogger.iteratorForAppenders();
-            while (iterator.hasNext()) {
-                ch.qos.logback.core.Appender<ch.qos.logback.classic.spi.ILoggingEvent> appender = iterator.next();
-                if (appender instanceof McpLogAppender) {
-                    return ((McpLogAppender) appender).getRecentLogs();
-                }
-            }
-        } catch (Exception ignored) {}
+        McpLogAppender appender = McpLogAppender.findAppender();
+        if (appender != null) {
+            return appender.getRecentLogs();
+        }
         return Collections.emptyList();
     }
 

@@ -1,5 +1,6 @@
 package com.example.mcp.tools;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -9,8 +10,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -20,6 +19,16 @@ public class CommandCodeTool {
 
     private static final String AUTH_DIR = ".commandcode";
     private static final String AUTH_FILE = "auth.json";
+
+    private final ObjectMapper objectMapper;
+
+    public CommandCodeTool() {
+        this.objectMapper = new ObjectMapper();
+    }
+
+    public CommandCodeTool(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+    }
 
     /**
      * Resolves the path to the Command Code auth.json file.
@@ -73,12 +82,11 @@ public class CommandCodeTool {
 
         try {
             String content = Files.readString(filePath, StandardCharsets.UTF_8);
-            // Quick regex parse to avoid bringing in extra heavy JSON parser dependencies
-            Pattern pattern = Pattern.compile("\"apiKey\"\\s*:\\s*\"([^\"]+)\"");
-            Matcher matcher = pattern.matcher(content);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> authData = objectMapper.readValue(content, Map.class);
+            String apiKey = (String) authData.get("apiKey");
 
-            if (matcher.find()) {
-                String apiKey = matcher.group(1);
+            if (apiKey != null && !apiKey.trim().isEmpty()) {
                 status.put("authenticated", true);
                 status.put("apiKeyMasked", maskApiKey(apiKey));
                 status.put("message", "Successfully authenticated using saved API Key.");

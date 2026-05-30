@@ -101,7 +101,25 @@ public class McpLogAppender extends AppenderBase<ILoggingEvent> {
     }
 
     public List<String> getRecentLogs() {
-        selfLogger.debug("Retrieving {} recent logs from buffer", logBuffer.size());
-        return new ArrayList<>(logBuffer);
+        synchronized (logBuffer) {
+            selfLogger.debug("Retrieving {} recent logs from buffer", logBuffer.size());
+            return new ArrayList<>(logBuffer);
+        }
+    }
+
+    /**
+     * Static helper to find the McpLogAppender from the Logback context.
+     */
+    public static McpLogAppender findAppender() {
+        try {
+            ch.qos.logback.classic.LoggerContext ctx = (ch.qos.logback.classic.LoggerContext) org.slf4j.LoggerFactory.getILoggerFactory();
+            ch.qos.logback.classic.Logger rootLogger = ctx.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+            for (ch.qos.logback.core.Appender<ILoggingEvent> appender : rootLogger.iteratorForAppenders()) {
+                if (appender instanceof McpLogAppender) {
+                    return (McpLogAppender) appender;
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 }

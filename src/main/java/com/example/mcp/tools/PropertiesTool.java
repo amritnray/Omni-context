@@ -48,7 +48,7 @@ public class PropertiesTool {
                     EnumerablePropertySource<?> enumerableSource = (EnumerablePropertySource<?>) source;
                     for (String name : enumerableSource.getPropertyNames()) {
                         try {
-                            Object value = env.getProperty(name);
+                            Object value = enumerableSource.getProperty(name);
                             if (isSensitive(name)) {
                                 properties.put(name, "******");
                             } else {

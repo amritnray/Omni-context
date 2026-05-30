@@ -1,7 +1,9 @@
 package com.example.mcp.transport;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.modelcontextprotocol.json.McpJsonMapper;
+import io.modelcontextprotocol.json.TypeRef;
+import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.*;
 import io.modelcontextprotocol.spec.McpSchema.JSONRPCMessage;
@@ -34,6 +36,7 @@ public class SessionOptionalSseTransportProvider implements McpServerTransportPr
     public static final String ENDPOINT_EVENT_TYPE = "endpoint";
 
     private final ObjectMapper objectMapper;
+    private final McpJsonMapper jsonMapper;
     private final String messageEndpoint;
     private final String sseEndpoint;
     private final String baseUrl;
@@ -59,6 +62,7 @@ public class SessionOptionalSseTransportProvider implements McpServerTransportPr
         if (sseEndpoint == null) throw new IllegalArgumentException("SSE endpoint must not be null");
 
         this.objectMapper = objectMapper;
+        this.jsonMapper = new JacksonMcpJsonMapper(objectMapper);
         this.baseUrl = baseUrl;
         this.messageEndpoint = messageEndpoint;
         this.sseEndpoint = sseEndpoint;
@@ -72,6 +76,15 @@ public class SessionOptionalSseTransportProvider implements McpServerTransportPr
     @Override
     public void setSessionFactory(McpServerSession.Factory sessionFactory) {
         this.sessionFactory = sessionFactory;
+    }
+
+    @Override
+    public java.util.List<String> protocolVersions() {
+        return java.util.List.of(
+                ProtocolVersions.MCP_2024_11_05,
+                ProtocolVersions.MCP_2025_03_26,
+                ProtocolVersions.MCP_2025_06_18,
+                ProtocolVersions.MCP_2025_11_25);
     }
 
     @Override
@@ -183,7 +196,7 @@ public class SessionOptionalSseTransportProvider implements McpServerTransportPr
             logger.debug("Received message on /mcp/message endpoint ({} bytes)", body.length());
             
             long startTime = System.currentTimeMillis();
-            JSONRPCMessage message = McpSchema.deserializeJsonRpcMessage(objectMapper, body);
+            JSONRPCMessage message = McpSchema.deserializeJsonRpcMessage(jsonMapper, body);
             
             logger.debug("Deserialized message, handling...");
             session.handle(message).block();
@@ -224,7 +237,7 @@ public class SessionOptionalSseTransportProvider implements McpServerTransportPr
         public Mono<Void> sendMessage(JSONRPCMessage message) {
             return Mono.fromRunnable(() -> {
                 try {
-                    String jsonText = objectMapper.writeValueAsString(message);
+                    String jsonText = jsonMapper.toString(message);
                     sseBuilder.id(sessionId);
                     sseBuilder.event(MESSAGE_EVENT_TYPE);
                     sseBuilder.data(jsonText);
@@ -236,8 +249,8 @@ public class SessionOptionalSseTransportProvider implements McpServerTransportPr
         }
 
         @Override
-        public <T> T unmarshalFrom(Object data, TypeReference<T> typeRef) {
-            return objectMapper.convertValue(data, typeRef);
+        public <T> T unmarshalFrom(Object data, TypeRef<T> typeRef) {
+            return objectMapper.convertValue(data, objectMapper.getTypeFactory().constructType(typeRef.getType()));
         }
 
         @Override

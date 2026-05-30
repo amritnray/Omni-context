@@ -5,6 +5,7 @@ import com.example.mcp.logging.McpLogAppender;
 import com.example.mcp.logging.McpLoggingLevelDeserializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
+import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.spec.McpSchema.LoggingLevel;
 import com.example.mcp.transport.SessionOptionalSseTransportProvider;
 import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
@@ -117,7 +118,7 @@ public class McpAutoConfiguration {
                 new Thread(() -> {
                     try {
                         logger.info("Launching MCP Stdio Server background thread...");
-                        var transport = new StdioServerTransportProvider(objectMapper);
+                        var transport = new StdioServerTransportProvider(new JacksonMcpJsonMapper(objectMapper));
                         serverManager.startServer(transport);
                     } catch (Exception e) {
                         logger.error("Failed to start Stdio Server Transport", e);
