@@ -2,6 +2,7 @@
 .gradle/
 build/
 .commandcode/
+gradle-dist/
 
 # Compiled class files
 *.class
