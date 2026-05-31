@@ -97,8 +97,11 @@ public class SessionOptionalSseTransportProvider implements McpServerTransportPr
         logger.debug("Attempting to broadcast message to {} active sessions", sessions.size());
         return Flux.fromIterable(sessions.values())
                 .flatMap(session -> session.sendNotification(method, params)
-                        .doOnError(e -> logger.error("Failed to send message to session {}: {}",
-                                session.getId(), e.getMessage()))
+                        .doOnError(e -> {
+                            logger.warn("Failed to send message to session {}: {} (removing session)",
+                                    session.getId(), e.getMessage());
+                            sessions.remove(session.getId());
+                        })
                         .onErrorComplete())
                 .then();
     }
@@ -236,14 +239,18 @@ public class SessionOptionalSseTransportProvider implements McpServerTransportPr
         @Override
         public Mono<Void> sendMessage(JSONRPCMessage message) {
             return Mono.fromRunnable(() -> {
+                if (!sessions.containsKey(sessionId)) {
+                    logger.debug("Session {} no longer active, skipping message", sessionId);
+                    return;
+                }
                 try {
                     String jsonText = objectMapper.writeValueAsString(message);
                     sseBuilder.id(sessionId);
                     sseBuilder.event(MESSAGE_EVENT_TYPE);
                     sseBuilder.data(jsonText);
                 } catch (Exception e) {
-                    logger.error("Failed to send message to session {}: {}", sessionId, e.getMessage());
-                    throw new RuntimeException("Failed to send SSE message", e);
+                    logger.warn("Failed to send message to session {}: {} (removing session)", sessionId, e.getMessage());
+                    sessions.remove(sessionId);
                 }
             });
         }
